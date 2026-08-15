@@ -38,17 +38,22 @@ int get_menu_choice(void)
             return 0;
         }
 
+        /* Reject leading + or - */
+        if (input[0] == '+' || input[0] == '-') {
+            printf("Invalid choice. Please enter a number from 0 to 5.\n");
+            continue;
+        }
+
         choice = strtol(input, &end, 10);
 
         while (*end == ' ' || *end == '\t') {
             end++;
         }
 
-        if (*end == '\n' || *end == '\0') {
+        if ((*end == '\n' || *end == '\0') &&
+            choice >= 0 && choice <= 5) {
 
-            if (choice >= 0 && choice <= 5) {
-                return (int)choice;
-            }
+            return (int)choice;
         }
 
         printf("Invalid choice. Please enter a number from 0 to 5.\n");
@@ -408,64 +413,62 @@ void load_contacts(Contact **contacts, int *count, int *capacity, int *next_id)
     }
 
     char line[150];
-    Contact contact;
+    int highest_id = 0;
 
     while (fgets(line, sizeof(line), file) != NULL) {
 
-        if (strncmp(line, "ID            : ", 16) == 0) {
+        if (strncmp(line, "ID            : ", 16) != 0) {
+            continue;
+        }
 
-            sscanf(line + 16, "%49[^\n]", contact.id);
+        if (*count == *capacity) {
 
-            fgets(line, sizeof(line), file);
-            sscanf(line + 16, "%49[^\n]", contact.name);
+            int new_capacity = *capacity * 2;
 
-            fgets(line, sizeof(line), file);
-            sscanf(line + 16, "%19[^\n]", contact.phone);
+            Contact *temp = realloc(
+                *contacts,
+                new_capacity * sizeof(Contact)
+            );
 
-            fgets(line, sizeof(line), file);
-            sscanf(line + 16, "%99[^\n]", contact.email);
-
-            if (*count == *capacity) {
-
-                int new_capacity = *capacity * 2;
-
-                Contact *temp = realloc(
-                    *contacts,
-                    new_capacity * sizeof(Contact)
-                );
-
-                if (temp == NULL) {
-                    printf("Memory reallocation failed.\n");
-                    fclose(file);
-                    return;
-                }
-
-                *contacts = temp;
-                *capacity = new_capacity;
+            if (temp == NULL) {
+                printf("Memory reallocation failed while loading contacts.\n");
+                fclose(file);
+                return;
             }
 
-            (*contacts)[*count] = contact;
-            (*count)++;
+            *contacts = temp;
+            *capacity = new_capacity;
         }
+
+        Contact *contact = &(*contacts)[*count];
+
+        sscanf(line + 16, "%49s", contact->id);
+
+        if (sscanf(contact->id, "CONTACT-%d", &highest_id) != 1) {
+            continue;
+        }
+
+        if (fgets(line, sizeof(line), file) == NULL)
+            break;
+
+        sscanf(line + 16, "%49[^\n]", contact->name);
+
+        if (fgets(line, sizeof(line), file) == NULL)
+            break;
+
+        sscanf(line + 16, "%19[^\n]", contact->phone);
+
+        if (fgets(line, sizeof(line), file) == NULL)
+            break;
+
+        sscanf(line + 16, "%99[^\n]", contact->email);
+
+        (*count)++;
     }
+
+    *next_id = highest_id + 1;
 
     fclose(file);
-
-    int max_id = 0;
-
-    for (int i = 0; i < *count; i++) {
-
-        int id_number;
-
-        if (sscanf((*contacts)[i].id, "CONTACT-%d", &id_number) == 1) {
-
-            if (id_number > max_id) {
-                max_id = id_number;
-            }
-        }
-    }
-
-    *next_id = max_id + 1;
 }
 
 int main()
